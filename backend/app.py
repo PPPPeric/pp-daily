@@ -38,6 +38,9 @@ def database():
                     project_id TEXT NOT NULL REFERENCES projects(id), day TEXT NOT NULL,
                     completed_at TEXT NOT NULL, PRIMARY KEY(project_id, day));
             ''')
+            conn.execute('BEGIN IMMEDIATE')
+            if 'icon' not in {row['name'] for row in conn.execute('PRAGMA table_info(projects)')}:
+                conn.execute("ALTER TABLE projects ADD COLUMN icon TEXT NOT NULL DEFAULT ''")
             conn.execute("INSERT OR IGNORE INTO meta VALUES('generation', ?)", (str(uuid4()),))
         yield conn
     finally:
@@ -57,6 +60,12 @@ class Model(BaseModel):
 class ProjectInput(Model):
     name: str = Field(min_length=1, max_length=40)
     color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
+    icon: str = Field(default='', max_length=1)
+
+    @field_validator('icon', mode='before')
+    @classmethod
+    def clean_icon(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator('name')
     @classmethod
@@ -156,7 +165,7 @@ def create_project(body: CreateProject):
         conn.execute('BEGIN IMMEDIATE')
         check_generation(conn, body.generation)
         position = conn.execute('SELECT COALESCE(MAX(position), -1)+1 FROM projects').fetchone()[0]
-        conn.execute('INSERT INTO projects VALUES(?,?,?,?,?,NULL)', (str(uuid4()), body.name, body.color, position, today()))
+        conn.execute('INSERT INTO projects(id,name,color,position,created,archived,icon) VALUES(?,?,?,?,?,NULL,?)', (str(uuid4()), body.name, body.color, position, today(), body.icon))
         return snapshot(conn)
 
 
@@ -180,7 +189,7 @@ def edit(project_id: UUID, body: EditProject):
         check_generation(conn, body.generation)
         if get_project(conn, project_id)['archived']:
             raise HTTPException(422, '归档项目不能再修改')
-        conn.execute('UPDATE projects SET name=?,color=? WHERE id=?', (body.name, body.color, str(project_id)))
+        conn.execute('UPDATE projects SET name=?,color=?,icon=? WHERE id=?', (body.name, body.color, body.icon, str(project_id)))
         return snapshot(conn)
 
 
@@ -244,8 +253,8 @@ def restore(body: Restore):
         safety.write_text(json.dumps(snapshot(conn), ensure_ascii=False), encoding='utf-8')
         conn.execute('DELETE FROM completions')
         conn.execute('DELETE FROM projects')
-        conn.executemany('INSERT INTO projects VALUES(?,?,?,?,?,?)',
-                         [(p['id'], p['name'], p['color'], p['position'], p['created'], p['archived']) for p in projects.values()])
+        conn.executemany('INSERT INTO projects(id,name,color,position,created,archived,icon) VALUES(?,?,?,?,?,?,?)',
+                         [(p['id'], p['name'], p['color'], p['position'], p['created'], p['archived'], p['icon']) for p in projects.values()])
         conn.executemany('INSERT INTO completions VALUES(?,?,?)',
                          [(str(c.project_id), c.day.isoformat(), c.completed_at.isoformat()) for c in backup.completions])
         conn.execute("UPDATE meta SET value=? WHERE key='generation'", (str(uuid4()),))

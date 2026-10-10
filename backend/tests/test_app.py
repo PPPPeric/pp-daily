@@ -1,10 +1,44 @@
 import copy
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from backend import app as module
+
+
+def test_icon_create_edit_backup_and_legacy_restore(client):
+    state = create(client)
+    project = state['projects'][0]
+    response = client.put('/api/projects/' + project['id'], json={
+        'generation':state['generation'], 'name':project['name'], 'color':project['color'], 'icon':' 读 '})
+    assert response.status_code == 200
+    assert response.json()['projects'][0]['icon'] == '读'
+    saved = client.get('/api/backup').json()
+    restored = client.post('/api/restore',json={'generation':saved['generation'],'backup':saved})
+    assert restored.status_code == 200
+    assert restored.json()['projects'][0]['icon'] == '读'
+    legacy = copy.deepcopy(restored.json())
+    del legacy['projects'][0]['icon']
+    restored = client.post('/api/restore',json={'generation':legacy['generation'],'backup':legacy})
+    assert restored.status_code == 200
+    assert restored.json()['projects'][0]['icon'] == ''
+    body = {'generation':restored.json()['generation'], 'name':'散步', 'color':'#285C47', 'icon':'走'}
+    assert client.post('/api/projects',json=body).json()['projects'][-1]['icon'] == '走'
+    body['icon'] = '散步'
+    assert client.post('/api/projects',json=body).status_code == 422
+
+
+def test_migrates_existing_project_without_losing_records(client):
+    with sqlite3.connect(module.DB_PATH) as conn:
+        conn.execute('CREATE TABLE projects(id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL, created TEXT NOT NULL, archived TEXT)')
+        conn.execute('INSERT INTO projects VALUES(?,?,?,?,?,?)',('old','阅读','#285C47',0,'2026-01-01',None))
+    state = client.get('/api/state').json()
+    assert state['projects'][0]['id'] == 'old'
+    assert state['projects'][0]['name'] == '阅读'
+    assert state['projects'][0]['icon'] == ''
+    assert client.get('/api/state').json()['projects'] == state['projects']
 
 
 @pytest.fixture

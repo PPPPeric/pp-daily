@@ -1,4 +1,4 @@
-export interface Project { id: string; name: string; color: string; position: number; created: string; archived: string | null }
+export interface Project { id: string; name: string; icon?: string; color: string; position: number; created: string; archived: string | null }
 export interface Completion { project_id: string; day: string; completed_at: string }
 export interface Snapshot { version: number; generation: string; projects: Project[]; completions: Completion[] }
 export const dayAt = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year:'numeric', month:'2-digit', day:'2-digit' }).format(now)
@@ -14,3 +14,5 @@ export function metrics(project: Project, records: Completion[], today: string) 
   for (const day of days) { run = previous && addDays(previous, 1) === day ? run + 1 : 1; longest = Math.max(longest, run); previous = day }
   return [days.length, days.filter(d => d.slice(0,7) === today.slice(0,7)).length, current, longest]
 }
+
+export const projectIcon = (project: Pick<Project, 'name' | 'icon'>) => Array.from(project.icon?.trim() || project.name.trim())[0] || 'p'

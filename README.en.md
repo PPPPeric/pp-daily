@@ -29,7 +29,7 @@ The UI accounts for safe areas, dynamic viewport height, landscape side insets, 
 
 ## Features and rules
 
-- **Today:** complete each project once per day. Doing nothing means incomplete. No cancellation, backdating, duration tracking, pause, or resume.
+- **Today:** browse the last seven dates, with a default avatar and current streak for each project. Swipe the entire row to the right by approximately 120 pixels and release to complete it once per day. Completed projects move into a separate section below. Past dates are read-only; taps and short swipes do not complete projects. Doing nothing means incomplete. No cancellation, backdating, duration tracking, pause, or resume.
 - **Calendar:** a read-only monthly calendar for one selected project. Future dates, dates before creation, and dates after archival are not applicable.
 - **Statistics:** total completed days, completed days this month, current streak, and longest streak. No completion rates or trend charts.
 - **Management:** create, rename, choose a color, reorder, or permanently archive projects while preserving history. Management requires a connection to the server.
@@ -153,3 +153,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Verifica
 ## License
 
 The owner has not selected an open-source license. Public visibility enables viewing and GitHub forking under GitHub's terms; no MIT or other open-source license is implied. See [GitHub's licensing guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+
+### Project text icons
+
+Set a single character as the project icon when creating or editing a project. Leave it blank to use the first character of the project name. The icon syncs with project settings and is included in backups; existing projects and older backups fall back to the project name.
