@@ -1,0 +1,110 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { addDays, dayAt, metrics, type Project } from './domain'
+import { local, status, busy, conflict, storageReady, init, sync, complete, manage, exportLocal, reloadServer } from './store'
+
+const page = ref('今日'), today = ref(dayAt()), selected = ref(''), month = ref(today.value.slice(0,7))
+const message = ref(''), name = ref(''), color = ref('#285C47'), editing = ref(''), working = ref(false)
+const projects = computed(() => local.value.snapshot.projects)
+const active = computed(() => projects.value.filter(p => !p.archived))
+const project = computed(() => projects.value.find(p => p.id === selected.value) || projects.value[0])
+const done = (id: string, day = today.value) => local.value.snapshot.completions.some(c => c.project_id === id && c.day === day)
+const doneCount = computed(() => active.value.filter(p => done(p.id)).length)
+const dateText = computed(() => new Date(today.value + 'T12:00:00+08:00').toLocaleDateString('zh-CN', {timeZone:'Asia/Shanghai', month:'long', day:'numeric'}))
+const weekday = computed(() => new Date(today.value + 'T12:00:00+08:00').toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai', weekday:'long'}))
+const stats = computed(() => project.value ? metrics(project.value, local.value.snapshot.completions, today.value) : [0,0,0,0])
+const statLabels = ['累计完成天数','本月完成天数','当前连续天数','最长连续天数']
+const cells = computed(() => {
+  const start = month.value + '-01', offset = (new Date(start + 'T12:00:00Z').getUTCDay() + 6) % 7
+  const days = new Date(Number(month.value.slice(0,4)), Number(month.value.slice(5,7)),0).getDate()
+  return [...Array(offset).fill(''), ...Array.from({length:days},(_,i) => addDays(start,i))]
+})
+const applicable = (day: string) => !!project.value && day <= today.value && day >= project.value.created && (!project.value.archived || day <= project.value.archived)
+function shiftMonth(by: number) { const d = new Date(month.value + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth()+by); month.value = d.toISOString().slice(0,7) }
+async function action(task: () => Promise<unknown>) {
+  if (working.value) return
+  working.value = true; message.value = ''
+  try { await task() } catch (error) { message.value = (error as Error).message } finally { working.value = false }
+}
+async function saveProject() {
+  await action(async () => {
+    await manage(editing.value ? '/projects/' + editing.value : '/projects', {name:name.value,color:color.value},editing.value ? 'PUT' : 'POST')
+    name.value = ''; editing.value = ''
+  })
+}
+function edit(p: Project) { editing.value = p.id; name.value = p.name; color.value = p.color }
+async function archive(p: Project) {
+  if (!window.confirm(`归档「${p.name}」？历史会保留，此后不再展示，也不能恢复。`)) return
+  await action(() => manage('/projects/' + p.id + '/archive',{}))
+}
+async function move(p: Project, offset: number) {
+  const ids = projects.value.map(p => p.id), index = ids.indexOf(p.id), target = index + offset
+  if (target < 0 || target >= ids.length) return
+  ;[ids[index],ids[target]] = [ids[target]!,ids[index]!]
+  await action(() => manage('/projects/order',{ids},'PUT'))
+}
+async function restore(event: Event) {
+  const input = event.target as HTMLInputElement, file = input.files?.[0]
+  if (!file) return
+  await action(async () => {
+    if (file.size > 20000000) throw new Error('备份文件过大')
+    const backup = JSON.parse(await file.text())
+    if (backup.version !== 1 || !Array.isArray(backup.projects) || !Array.isArray(backup.completions)) throw new Error('备份格式不正确')
+    if (!window.confirm(`将用备份中的 ${backup.projects.length} 个项目和 ${backup.completions.length} 条记录替换服务器数据。恢复前服务器会自动备份。是否继续？`)) return
+    await manage('/restore',{backup})
+  })
+  input.value = ''
+}
+async function reset() {
+  if (window.confirm('请先导出本地备份。重新载入会放弃此设备待同步记录，用服务器数据替换本地副本。')) await action(reloadServer)
+}
+function wake() { today.value = dayAt(); if (document.visibilityState === 'visible') void sync() }
+let timer: ReturnType<typeof setInterval>
+onMounted(() => { void init(); timer = setInterval(wake,30000); window.addEventListener('online',wake); document.addEventListener('visibilitychange',wake) })
+onUnmounted(() => { clearInterval(timer); window.removeEventListener('online',wake); document.removeEventListener('visibilitychange',wake) })
+</script>
+
+<template>
+  <div class="app-shell">
+    <header class="brand"><a href="#" @click.prevent="page='今日'" aria-label="pp日常首页"><span class="mark">pp</span><span>日常<span class="brand-note">一点一滴，都是日常。</span></span></a><button class="icon-button" @click="page='管理'" aria-label="管理">⚙</button></header>
+    <main>
+      <div v-if="conflict" class="notice"><strong>服务器数据已恢复</strong><p>先保存本地备份，再载入新的服务器数据。</p><button @click="exportLocal">导出本地备份</button><button @click="reset">重新载入</button></div>
+      <p v-if="message" class="error" role="alert">{{ message }}</p>
+      <template v-if="page==='今日'">
+        <section class="date-heading"><p class="eyebrow">{{ today.slice(0,4) }} · {{ weekday }}</p><h1>{{ dateText }}<span class="little-leaf">✳</span></h1><p class="subtle">把日子，过成喜欢的样子。</p></section>
+        <section class="progress-note"><span>今日的日常</span><span><b>{{ doneCount }}</b> / {{ active.length }} 已完成</span></section>
+        <div class="progress-line"><i :style="{width:(active.length ? doneCount / active.length * 100 : 0)+'%'}"></i></div>
+        <section class="daily-list">
+          <article v-for="(p,index) in active" :key="p.id" class="habit-card" :class="{completed:done(p.id)}" :style="{'--habit-color':p.color}">
+            <span class="habit-number">{{ String(index+1).padStart(2,'0') }}</span><div class="habit-title"><h2>{{ p.name }}</h2><p>{{ done(p.id) ? '今日已完成，明天见' : '今天，也为自己做一点' }}</p></div>
+            <button class="complete-button" :disabled="done(p.id) || working || !storageReady || conflict" @click="action(() => complete(p.id))" :aria-label="p.name + (done(p.id) ? '已完成' : '完成')"><span>{{ done(p.id) ? '✓' : '+' }}</span>{{ done(p.id) ? '已完成' : '完成' }}</button>
+          </article>
+        </section>
+        <section v-if="!active.length" class="empty"><span>✳</span><h2>从一件小事开始</h2><p>创建你的第一个日常项目。</p><button @click="page='管理'">添加项目</button></section>
+        <p v-else class="end-note">{{ doneCount === active.length ? '今天的日常已完成，好好享受余下的时光。' : '不用赶路，每天一点就好。' }}</p>
+      </template>
+      <template v-else-if="page==='月历' || page==='统计'">
+        <section class="page-heading"><p class="eyebrow">{{ page==='月历' ? 'DAY BY DAY' : 'LITTLE THINGS ADD UP' }}</p><h1>{{ page==='月历' ? '日子留下的痕迹' : '每一天，都算数' }}</h1><p class="subtle">{{ page==='月历' ? '回看一件事，慢慢成为日常。' : '小小的坚持，也值得被看见。' }}</p></section>
+        <label class="selector">选择项目<select :value="project?.id || ''" @change="selected=($event.target as HTMLSelectElement).value" aria-label="选择项目"><option v-if="!projects.length" value="">暂无项目</option><option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}{{ p.archived ? ' · 已归档' : '' }}</option></select></label>
+        <section v-if="project && page==='月历'" class="calendar-paper">
+          <div class="month-heading"><button class="icon-button" @click="shiftMonth(-1)" aria-label="上个月">‹</button><h2>{{ Number(month.slice(0,4)) }} 年 {{ Number(month.slice(5,7)) }} 月</h2><button class="icon-button" @click="shiftMonth(1)" aria-label="下个月">›</button></div>
+          <div class="calendar-grid weekdays"><span v-for="d in ['一','二','三','四','五','六','日']" :key="d">{{ d }}</span></div>
+          <div class="calendar-grid"><div v-for="(day,index) in cells" :key="index" class="day-cell" :class="{checked:day && done(project.id,day), muted:day && !applicable(day), today:day===today}" :aria-label="day ? day + (done(project.id,day) ? ' 已完成' : applicable(day) ? ' 未完成' : ' 不适用') : day"><span>{{ day ? Number(day.slice(8)) : '' }}</span><small v-if="day && done(project.id,day)">✓</small></div></div>
+          <div class="legend"><span>● 已完成</span><span>○ 未完成</span><span class="subtle">— 不适用</span></div>
+        </section>
+        <section v-if="project && page==='统计'" class="stats-grid"><article v-for="(label,index) in statLabels" :key="label"><p>{{ label }}</p><strong>{{ stats[index] }}<small>天</small></strong><span>{{ ['每一步，都有留下','这个月的日常','慢慢来，继续就好','属于你的坚持'][index] }}</span></article></section>
+        <p v-if="project && page==='统计'" class="end-note">今天未完成时，当前连续天数算到昨天。<br>归档项目算到归档当天。</p>
+        <p v-if="!project" class="empty">还没有项目，去管理页创建一个吧。</p>
+      </template>
+      <template v-else>
+        <section class="page-heading"><p class="eyebrow">MAKE IT YOURS</p><h1>整理你的日常</h1><p class="subtle">留一点空间，给真正想做的事。</p></section>
+        <section class="management-paper"><h2>{{ editing ? '编辑项目' : '添加一个项目' }}</h2><form @submit.prevent="saveProject"><label>项目名称<input v-model="name" maxlength="40" required placeholder="例如：阅读、散步、学英语"></label><label class="color-row">项目颜色<input v-model="color" type="color" aria-label="项目颜色"></label><button class="primary" :disabled="working || conflict || !storageReady">{{ editing ? '保存修改' : '添加项目' }}</button><button v-if="editing" type="button" @click="editing='';name=''">取消编辑</button></form><p class="subtle small">项目管理需要连接服务器。</p></section>
+        <section class="management-paper"><h2>我的项目 <small>{{ projects.length }}</small></h2><article v-for="(p,index) in projects" :key="p.id" class="project-row"><div><span class="color-dot" :style="{background:p.color}"></span><b>{{ p.name }}</b><small v-if="p.archived">已归档</small></div><div class="row-actions"><button :disabled="index===0 || working || conflict" @click="move(p,-1)" :aria-label="p.name+'上移'">↑</button><button :disabled="index===projects.length-1 || working || conflict" @click="move(p,1)" :aria-label="p.name+'下移'">↓</button><button v-if="!p.archived" :disabled="working || conflict" @click="edit(p)">编辑</button><button v-if="!p.archived" :disabled="working || conflict" @click="archive(p)">归档</button></div></article><p v-if="!projects.length" class="subtle">还没有项目。</p></section>
+        <section class="management-paper"><h2>把日常好好保存</h2><p class="subtle">完整备份包含此设备尚未同步的记录。<br>恢复会替换服务器数据，并自动保留恢复前备份。</p><div class="backup-actions"><button :disabled="!storageReady || !local.snapshot.generation" @click="exportLocal">导出完整备份 ↗</button><label class="file-button">恢复备份<input type="file" accept=".json,application/json" :disabled="working || conflict" @change="restore"></label></div></section>
+        <section class="management-paper"><h2>连接与保存</h2><p>{{ status }}</p><p class="subtle">{{ local.pending.length }} 条待同步 · Asia/Shanghai</p><button :disabled="busy || conflict" @click="sync">立即同步</button><p class="subtle small">Safari → 分享 → 添加到主屏幕。<br>首次加载和同步需要私人网络连接；之后可以离线完成当天项目。</p></section>
+      </template>
+      <div class="sync-status" role="status"><i :class="{offline:local.pending.length || conflict}"></i>{{ busy ? '同步中…' : status }}</div>
+    </main>
+    <nav aria-label="主导航"><button v-for="(item,index) in ['今日','月历','统计']" :key="item" :class="{selected:page===item}" @click="page=item"><span>{{ ['☀','▦','▥'][index] }}</span>{{ item }}</button></nav>
+  </div>
+</template>

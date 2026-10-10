@@ -1,0 +1,29 @@
+name: Bug report / 问题反馈
+description: Report a reproducible issue using sample data.
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened? / 问题描述
+      description: Do not include personal backups, credentials, or private network addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce / 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期结果
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device, iOS, browser, commit / 设备、系统、浏览器、版本
+      placeholder: iPhone 15, iOS version, Safari or Home Screen PWA, commit SHA
+    validations:
+      required: true
