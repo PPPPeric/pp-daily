@@ -2,7 +2,7 @@
 
 ## Intended deployment
 
-pp日常 is an unauthenticated, single-user service for private Tailscale access. Run FastAPI on `127.0.0.1` behind Tailscale Serve HTTPS and restrict tailnet access to your own devices. Public source code does not mean the running service should be public. Do not enable Funnel, expose the port to the Internet, or use GitHub Pages as the backend.
+pp Daily is an unauthenticated, single-user service for private Tailscale access. Run FastAPI on `127.0.0.1` behind Tailscale Serve HTTPS and restrict tailnet access to your own devices. Public source code does not mean the running service should be public. Do not enable Funnel, expose the port to the Internet, or use GitHub Pages as the backend.
 
 本服务没有应用登录，只适合本人设备通过 Tailscale 私人 HTTPS 访问。后端监听本机，限制 tailnet 访问权限；公开的是源代码，不是个人打卡数据或服务入口。
 

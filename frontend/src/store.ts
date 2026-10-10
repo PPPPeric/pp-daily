@@ -65,5 +65,5 @@ export async function reloadServer() { await lock(async () => save({snapshot:awa
 export function exportLocal() {
   const blob = new Blob([JSON.stringify(local.value.snapshot,null,2)],{type:'application/json'})
   const url = URL.createObjectURL(blob), link = document.createElement('a')
-  link.href = url; link.download = `pp日常-${dayAt()}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url),60000)
+  link.href = url; link.download = `pp Daily-${dayAt()}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url),60000)
 }

@@ -1,29 +1,10 @@
-# pp日常 · pp Daily
+# pp Daily
 
 [中文](README.md) | [English](README.en.md)
 
 [![CI](https://github.com/PPPPeric/pp-daily/actions/workflows/ci.yml/badge.svg)](https://github.com/PPPPeric/pp-daily/actions/workflows/ci.yml)
 
 A personal daily check-in PWA with a warm ivory and forest-green interface. Develop on Windows, host on a Mac mini, and use it privately on your iPhone through Tailscale. No application account or login is required.
-
-<img src="docs/images/iphone15-today.png" alt="Today screen with sample data" width="300">
-
-## Device support
-
-The first release targets **iPhone 15 with iOS 17+**, using Safari or a Home Screen PWA, primarily in portrait orientation. Development layout checks use a 393 × 852 CSS-pixel viewport and a basic landscape check. The layout remains responsive for Windows previews; other phone models have no dedicated compatibility guarantee. There is no device lock or fixed physical-pixel rendering.
-
-The UI accounts for safe areas, dynamic viewport height, landscape side insets, and touch controls of at least 44 CSS pixels. Browser layout checks do not establish real-device compatibility: follow the [iPhone 15 acceptance checklist](docs/iphone15.md). **The application UI is Chinese; the project documentation is bilingual.**
-
-## Features and rules
-
-- **Today:** complete each project once per day. Doing nothing means incomplete. No cancellation, backdating, duration tracking, pause, or resume.
-- **Calendar:** a read-only monthly calendar for one selected project. Future dates, dates before creation, and dates after archival are not applicable.
-- **Statistics:** total completed days, completed days this month, current streak, and longest streak. No completion rates or trend charts.
-- **Management:** create, rename, choose a color, reorder, or permanently archive projects while preserving history. Management requires a connection to the server.
-- **Offline:** previously loaded pages and check-ins remain available through a Service Worker and IndexedDB. Pending records synchronize on launch, foreground return, connectivity restoration, and a 30-second foreground retry.
-- **Backup:** export a complete JSON snapshot, including this device's unsynced records. Restore replaces the server dataset and automatically saves a pre-restore backup.
-
-All dates use `Asia/Shanghai`. Before today's completion, the current streak is calculated through yesterday. Archived projects use their archive date as the streak endpoint. Valid offline records from the archive date can still synchronize; later dates cannot be completed. Background synchronization while the app is closed is not promised.
 
 ## Architecture
 
@@ -37,6 +18,25 @@ iPhone 15 PWA (Vue 3 + TypeScript)
 ```
 
 The frontend and API share one origin. Project/day uniqueness makes uploads idempotent. Restore changes the dataset generation so stale clients cannot silently upload old records into restored data.
+
+## Device support
+
+The first release targets **iPhone 15 with iOS 17+**, using Safari or a Home Screen PWA, primarily in portrait orientation. Development layout checks use a 393 × 852 CSS-pixel viewport and a basic landscape check. The layout remains responsive for Windows previews; other phone models have no dedicated compatibility guarantee. There is no device lock or fixed physical-pixel rendering.
+
+The UI accounts for safe areas, dynamic viewport height, landscape side insets, and touch controls of at least 44 CSS pixels. Browser layout checks do not establish real-device compatibility: follow the [iPhone 15 acceptance checklist](docs/iphone15.md). **The application UI is Chinese; the project documentation is bilingual.**
+
+<img src="docs/images/iphone15-today.png" alt="Today screen with sample data" width="300">
+
+## Features and rules
+
+- **Today:** complete each project once per day. Doing nothing means incomplete. No cancellation, backdating, duration tracking, pause, or resume.
+- **Calendar:** a read-only monthly calendar for one selected project. Future dates, dates before creation, and dates after archival are not applicable.
+- **Statistics:** total completed days, completed days this month, current streak, and longest streak. No completion rates or trend charts.
+- **Management:** create, rename, choose a color, reorder, or permanently archive projects while preserving history. Management requires a connection to the server.
+- **Offline:** previously loaded pages and check-ins remain available through a Service Worker and IndexedDB. Pending records synchronize on launch, foreground return, connectivity restoration, and a 30-second foreground retry.
+- **Backup:** export a complete JSON snapshot, including this device's unsynced records. Restore replaces the server dataset and automatically saves a pre-restore backup.
+
+All dates use `Asia/Shanghai`. Before today's completion, the current streak is calculated through yesterday. Archived projects use their archive date as the streak endpoint. Valid offline records from the archive date can still synchronize; later dates cannot be completed. Background synchronization while the app is closed is not promised.
 
 ## Windows development
 
@@ -106,7 +106,7 @@ Frontend dependencies are locked in `package-lock.json`; direct Python dependenc
    curl http://127.0.0.1:8000/api/state
    ```
 
-6. Connect Tailscale on the iPhone, open the private HTTPS address in Safari, and choose Share → Add to Home Screen. The default name is `pp日常`, with a forest-green double-p icon.
+6. Connect Tailscale on the iPhone, open the private HTTPS address in Safari, and choose Share → Add to Home Screen. The default name is `pp Daily`, with a forest-green double-p icon.
 
 Public GitHub source code is separate from the private running service. The backend has no application authentication and must remain behind private network access controls. GitHub Pages cannot provide this application's FastAPI/SQLite backend.
 

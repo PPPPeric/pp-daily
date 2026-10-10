@@ -140,7 +140,7 @@ def validate_completion(record, project):
         raise HTTPException(422, '该日期不在项目有效范围内')
 
 
-app = FastAPI(title='pp日常', docs_url=None, redoc_url=None)
+app = FastAPI(title='pp Daily', docs_url=None, redoc_url=None)
 
 
 @app.get('/api/state')

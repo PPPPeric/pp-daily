@@ -1,10 +1,23 @@
-# pp日常
+# pp Daily
 
 [中文](README.md) | [English](README.en.md)
 
 [![CI](https://github.com/PPPPeric/pp-daily/actions/workflows/ci.yml/badge.svg)](https://github.com/PPPPeric/pp-daily/actions/workflows/ci.yml)
 
-给自己的日常留一点痕迹。iPhone 优先的单人 PWA：米白与墨绿、双小写 p 图标，无 App 登录。
+面向 iPhone 15 的个人每日打卡 PWA，采用 Vue 3、FastAPI 和 SQLite，支持离线记录、私人网络同步和备份恢复。
+
+## 项目架构
+
+```text
+iPhone 15 PWA（Vue 3 + TypeScript）
+  ├─ IndexedDB：本地数据副本和待同步完成记录
+  └─ Tailscale 私人 HTTPS
+       └─ Mac mini：FastAPI（127.0.0.1:8000）
+            ├─ 前端静态文件
+            └─ SQLite：项目、完成记录和备份
+```
+
+前端和 API 使用同一地址。完成操作先写入 IndexedDB，联网后同步至 SQLite；项目与日期的唯一键避免重复计数。恢复备份会更换数据版本，阻止旧设备将待同步记录写回恢复后的数据库。Windows 用于开发，Mac mini 提供持续运行的私人服务。
 
 ## 设备支持
 
@@ -12,7 +25,7 @@
 
 界面处理动态高度、顶部和底部安全区域、横屏左右安全区及至少 44 CSS 像素的操作目标。浏览器尺寸检查不等于 iPhone 真机验证；真机验收清单见 [iPhone 15 验收说明](docs/iphone15.md)。界面目前为中文，英文支持指项目文档。
 
-<img src="docs/images/iphone15-today.png" alt="pp日常今日页面，示例数据" width="300">
+<img src="docs/images/iphone15-today.png" alt="pp Daily今日页面，示例数据" width="300">
 
 ## 功能
 
@@ -62,7 +75,7 @@ npm run build
 3. 在 Mac 项目目录执行 `bash scripts/install-macos.sh`。该脚本构建前端并安装两个用户级 LaunchAgent：服务自动重启；每天 03:00 做 SQLite 一致性备份，保留最新 30 份。用户登录后运行，机器重启后也需用户登录。
 4. 执行 `tailscale serve --bg http://127.0.0.1:8000`，按照 Tailscale 提示启用 tailnet HTTPS，使用命令返回的固定 `https://机器名.tailnet名.ts.net` 地址。运行 `tailscale serve status` 核查。只使用 Serve；不得开启 Funnel 或路由器公网端口转发。
 5. 关闭 Mac 自动睡眠并保持联网。检查 `data/logs/`，确认服务与定时备份正常。运行 `curl http://127.0.0.1:8000/api/state` 验证接口。
-6. iPhone 打开 Tailscale，再用 Safari 打开固定 HTTPS 地址；分享 → 添加到主屏幕，名称默认「pp日常」。应看到墨绿双 p 图标。
+6. iPhone 打开 Tailscale，再用 Safari 打开固定 HTTPS 地址；分享 → 添加到主屏幕，名称默认「pp Daily」。应看到墨绿双 p 图标。
 
 Tailscale Serve 官方说明：https://tailscale.com/docs/reference/tailscale-cli/serve
 本地后端只监听 127.0.0.1，不包含登录和公网防护；访问控制由 tailnet 权限负责。
