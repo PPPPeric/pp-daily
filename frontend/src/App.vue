@@ -42,6 +42,14 @@ async function archive(p: Project) {
   if (!window.confirm(`归档「${p.name}」？历史会保留，此后不再展示，也不能恢复。`)) return
   await action(() => manage('/projects/' + p.id + '/archive',{}))
 }
+async function remove(p: Project) {
+  if (!window.confirm(`删除「${p.name}」及其全部打卡记录？此操作不能撤销，服务器会保存删除前备份。若只想停止打卡并保留历史，请选择归档。`)) return
+  await action(async () => {
+    await manage('/projects/' + p.id,{},'DELETE')
+    if (editing.value === p.id) { editing.value = ''; name.value = ''; icon.value = '' }
+    if (selected.value === p.id) selected.value = ''
+  })
+}
 async function move(p: Project, offset: number) {
   const ids = projects.value.map(p => p.id), index = ids.indexOf(p.id), target = index + offset
   if (target < 0 || target >= ids.length) return
@@ -103,7 +111,7 @@ onUnmounted(() => { clearInterval(timer); window.removeEventListener('online',wa
       </template>
       <template v-else>
         <section class="management-paper"><form @submit.prevent="saveProject"><label>项目名称<input v-model="name" maxlength="40" required placeholder="例如：阅读、散步、学英语"></label><label>图标文字<input v-model="icon" maxlength="1" :placeholder="Array.from(name.trim())[0] || '一个字，例如：读'" aria-describedby="icon-help"></label><p id="icon-help" class="subtle small">留空时使用项目名称的第一个字。</p><label class="color-row">项目颜色<input v-model="color" type="color" aria-label="项目颜色"></label><button class="primary" :disabled="working || conflict || !storageReady">{{ editing ? '保存修改' : '添加项目' }}</button><button v-if="editing" type="button" @click="editing='';name='';icon=''">取消编辑</button></form><p class="subtle small">项目管理需要连接服务器。</p></section>
-        <section class="management-paper"><h2>我的项目 <small>{{ projects.length }}</small></h2><article v-for="(p,index) in projects" :key="p.id" class="project-row"><div><span class="color-dot" :style="{background:p.color}"></span><b>{{ p.name }}</b><small v-if="p.archived">已归档</small></div><div class="row-actions"><button :disabled="index===0 || working || conflict" @click="move(p,-1)" :aria-label="p.name+'上移'">↑</button><button :disabled="index===projects.length-1 || working || conflict" @click="move(p,1)" :aria-label="p.name+'下移'">↓</button><button v-if="!p.archived" :disabled="working || conflict" @click="edit(p)">编辑</button><button v-if="!p.archived" :disabled="working || conflict" @click="archive(p)">归档</button></div></article><p v-if="!projects.length" class="subtle">还没有项目。</p></section>
+        <section class="management-paper"><h2>我的项目 <small>{{ projects.length }}</small></h2><article v-for="(p,index) in projects" :key="p.id" class="project-row"><div><span class="color-dot" :style="{background:p.color}"></span><b>{{ p.name }}</b><small v-if="p.archived">已归档</small></div><div class="row-actions"><button :disabled="index===0 || working || conflict" @click="move(p,-1)" :aria-label="p.name+'上移'">↑</button><button :disabled="index===projects.length-1 || working || conflict" @click="move(p,1)" :aria-label="p.name+'下移'">↓</button><button v-if="!p.archived" :disabled="working || conflict" @click="edit(p)">编辑</button><button v-if="!p.archived" :disabled="working || conflict" @click="archive(p)">归档</button><button class="danger" :disabled="working || conflict || !storageReady" :aria-label="'删除'+p.name" @click="remove(p)">删除</button></div></article><p v-if="!projects.length" class="subtle">还没有项目。</p></section>
         <section class="management-paper"><h2>数据备份</h2><p class="subtle">完整备份包含此设备尚未同步的记录。<br>恢复会替换服务器数据，并自动保留恢复前备份。</p><div class="backup-actions"><button :disabled="!storageReady || !local.snapshot.generation" @click="exportLocal">导出完整备份 ↗</button><label class="file-button">恢复备份<input type="file" accept=".json,application/json" :disabled="working || conflict" @change="restore"></label></div></section>
         <section class="management-paper"><h2>连接与保存</h2><p>{{ status }}</p><p class="subtle">{{ local.pending.length }} 条待同步 · Asia/Shanghai</p><button :disabled="busy || conflict" @click="sync">立即同步</button><p class="subtle small">Safari → 分享 → 添加到主屏幕。<br>首次加载和同步需要私人网络连接；之后可以离线完成当天项目。</p></section>
       </template>

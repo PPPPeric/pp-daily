@@ -32,7 +32,7 @@ The UI accounts for safe areas, dynamic viewport height, landscape side insets, 
 - **Today:** browse the last seven dates, with a default avatar and current streak for each project. Swipe the entire row to the right by approximately 120 pixels and release to complete it once per day. Completed projects move into a separate section below. Past dates are read-only; taps and short swipes do not complete projects. Doing nothing means incomplete. No cancellation, backdating, duration tracking, pause, or resume.
 - **Calendar:** a read-only monthly calendar for one selected project. Future dates, dates before creation, and dates after archival are not applicable.
 - **Statistics:** total completed days, completed days this month, current streak, and longest streak. No completion rates or trend charts.
-- **Management:** create, rename, choose a color, reorder, or permanently archive projects while preserving history. Management requires a connection to the server.
+- **Management:** create, rename, choose a color, reorder, or permanently archive projects while preserving history. Confirmed deletion removes a project and all its check-ins, including archived projects. The server saves a full pre-deletion JSON backup. Management requires a connection to the server.
 - **Offline:** previously loaded pages and check-ins remain available through a Service Worker and IndexedDB. Pending records synchronize on launch, foreground return, connectivity restoration, and a 30-second foreground retry.
 - **Backup:** export a complete JSON snapshot, including this device's unsynced records. Restore replaces the server dataset and automatically saves a pre-restore backup.
 
@@ -126,7 +126,7 @@ Manual consistent backup, safe while the server is running:
 
 The script uses SQLite's backup API and checks integrity. Copy at least one backup outside the Mac. The application does not automatically synchronize backups to iCloud or another cloud drive.
 
-For normal restoration, open Management → Restore backup, select a JSON export, and confirm replacement. The server validates the version, project references, dates, and uniqueness before replacing the dataset in one transaction. Pre-restore files are saved as `data/backups/before-restore-*.json` and are not removed by the 30-file daily-backup retention policy.
+For normal restoration, open Management → Restore backup, select a JSON export, and confirm replacement. The server validates the version, project references, dates, and uniqueness before replacing the dataset in one transaction. Pre-restore files are saved as `data/backups/before-restore-*.json` and are not removed by the 30-file daily-backup retention policy. Project deletion similarly saves `before-delete-*.json`; recovery replaces the entire dataset through the restore flow. Stale devices discard pending check-ins for deleted projects while synchronizing other projects normally.
 
 For machine recovery, stop the server, replace `data/pp-daily.sqlite3` with a consistent SQLite backup, and restart. Then export and restore JSON once through Management to create a new dataset generation. On every client, export unsynced local data before choosing Reload server data.
 

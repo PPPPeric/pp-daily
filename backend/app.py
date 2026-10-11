@@ -31,6 +31,7 @@ def database():
         with conn:
             conn.executescript('''
                 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS deleted_projects(id TEXT PRIMARY KEY);
                 CREATE TABLE IF NOT EXISTS projects(
                     id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
                     position INTEGER NOT NULL, created TEXT NOT NULL, archived TEXT);
@@ -203,12 +204,30 @@ def archive(project_id: UUID, body: GenerationInput):
         return snapshot(conn)
 
 
+@app.delete('/api/projects/{project_id}')
+def delete_project(project_id: UUID, body: GenerationInput):
+    with database() as conn, conn:
+        conn.execute('BEGIN IMMEDIATE')
+        check_generation(conn, body.generation)
+        get_project(conn, project_id)
+        folder = DB_PATH.parent / 'backups'
+        folder.mkdir(exist_ok=True)
+        safety = folder / f"before-delete-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}.json"
+        safety.write_text(json.dumps(snapshot(conn), ensure_ascii=False), encoding='utf-8')
+        conn.execute('INSERT INTO deleted_projects VALUES(?)', (str(project_id),))
+        conn.execute('DELETE FROM completions WHERE project_id=?', (str(project_id),))
+        conn.execute('DELETE FROM projects WHERE id=?', (str(project_id),))
+        return snapshot(conn)
+
+
 @app.post('/api/sync')
 def sync(body: Sync):
     with database() as conn, conn:
         conn.execute('BEGIN IMMEDIATE')
         check_generation(conn, body.generation)
         for record in body.completions:
+            if conn.execute('SELECT 1 FROM deleted_projects WHERE id=?', (str(record.project_id),)).fetchone():
+                continue
             project = get_project(conn, record.project_id)
             validate_completion(record, project)
             conn.execute('INSERT OR IGNORE INTO completions VALUES(?,?,?)',
@@ -253,6 +272,7 @@ def restore(body: Restore):
         safety.write_text(json.dumps(snapshot(conn), ensure_ascii=False), encoding='utf-8')
         conn.execute('DELETE FROM completions')
         conn.execute('DELETE FROM projects')
+        conn.execute('DELETE FROM deleted_projects')
         conn.executemany('INSERT INTO projects(id,name,color,position,created,archived,icon) VALUES(?,?,?,?,?,?,?)',
                          [(p['id'], p['name'], p['color'], p['position'], p['created'], p['archived'], p['icon']) for p in projects.values()])
         conn.executemany('INSERT INTO completions VALUES(?,?,?)',

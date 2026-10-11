@@ -1,4 +1,5 @@
 import copy
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -147,3 +148,68 @@ def test_order_requires_full_unique_list(client):
     assert client.put('/api/projects/order',json={'generation':state['generation'],'ids':[ids[0],ids[0]]}).status_code == 422
     reordered = client.put('/api/projects/order',json={'generation':state['generation'],'ids':ids[::-1]})
     assert [p['id'] for p in reordered.json()['projects']] == ids[::-1]
+
+
+def test_delete_project_preserves_other_data_and_safety_backup(client):
+    state = create(client, '测试')
+    saved = client.post('/api/sync', json=payload(state)).json()
+    state = create(client, '保留')
+    project_id = saved['projects'][0]['id']
+    before = client.get('/api/state').json()
+    response = client.request('DELETE', f'/api/projects/{project_id}', json={'generation':state['generation']})
+    assert response.status_code == 200
+    assert [p['name'] for p in response.json()['projects']] == ['保留']
+    assert response.json()['completions'] == []
+    assert response.json()['generation'] == state['generation']
+    backups = list((module.DB_PATH.parent / 'backups').glob('before-delete-*.json'))
+    assert len(backups) == 1
+    assert json.loads(backups[0].read_text()) == before
+    # An intentional full restore can recover the deleted project and its history.
+    restored = client.post('/api/restore', json={'generation':state['generation'], 'backup':before})
+    assert restored.status_code == 200
+    assert restored.json()['projects'] == before['projects']
+    assert restored.json()['completions'] == before['completions']
+    with module.database() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM deleted_projects').fetchone()[0] == 0
+
+
+def test_delete_archived_project_and_ignore_stale_offline_records(client):
+    state = create(client, '测试')
+    stale = payload(state)
+    project_id = state['projects'][0]['id']
+    client.post(f'/api/projects/{project_id}/archive', json={'generation':state['generation']})
+    assert client.request('DELETE', f'/api/projects/{project_id}', json={'generation':state['generation']}).status_code == 200
+    state = create(client, '保留')
+    body = payload(state)
+    body['completions'] += stale['completions']
+    # The tombstone persists across connections and does not block unrelated uploads.
+    response = client.post('/api/sync', json=body)
+    assert response.status_code == 200
+    assert len(response.json()['completions']) == 1
+    assert response.json()['completions'][0]['project_id'] == state['projects'][0]['id']
+    with module.database() as conn:
+        assert conn.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
+def test_delete_rejects_stale_generation_and_missing_project(client):
+    state = create(client)
+    project_id = state['projects'][0]['id']
+    response = client.request('DELETE', f'/api/projects/{project_id}', json={'generation':str(module.uuid4())})
+    assert response.status_code == 409
+    response = client.request('DELETE', f'/api/projects/{module.uuid4()}', json={'generation':state['generation']})
+    assert response.status_code == 404
+    assert client.get('/api/state').json() == state
+    assert not (module.DB_PATH.parent / 'backups').exists()
+
+
+def test_delete_aborts_if_safety_backup_fails(client, monkeypatch):
+    state = create(client)
+    saved = client.post('/api/sync', json=payload(state)).json()
+    def fail(*args, **kwargs):
+        raise OSError('disk full')
+    monkeypatch.setattr(module.Path, 'write_text', fail)
+    with pytest.raises(OSError, match='disk full'):
+        client.request('DELETE', f"/api/projects/{state['projects'][0]['id']}", json={'generation':state['generation']})
+    assert client.get('/api/state').json() == saved
+    with module.database() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM deleted_projects').fetchone()[0] == 0
